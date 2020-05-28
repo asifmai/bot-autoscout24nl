@@ -2,28 +2,34 @@ const pupHelper = require('./puppeteerhelper');
 const _ = require('underscore');
 const fs = require('fs');
 const pLimit = require('p-limit');
+const moment = require('moment');
 const {dealerLink} = require('./keys');
 let browser;
 let productsLinks = [];
-productsLinks = JSON.parse(fs.readFileSync('productsLinks.json'));
+// productsLinks = JSON.parse(fs.readFileSync('productsLinks.json'));
+let products = [];
+// products = JSON.parse(fs.readFileSync('products.json'));
 
 const scrapeSite = () => new Promise(async (resolve, reject) => {
   try {
     console.log('Started Scraping...');
     // Launch The Browser
-    browser = await pupHelper.launchBrowser(true);
+    browser = await pupHelper.launchBrowser();
 
     // Fetch Links to individual Products
-    // await fetchProductsLinks();
+    await fetchProductsLinks();
 
     // Fetch Details of ads
-    const limit = pLimit(1);
+    const limit = pLimit(10);
     const promises = [];
-    // for (let i = 0; i < productsLinks.length; i++) {
-    for (let i = 0; i < 1; i++) {
+    for (let i = 0; i < productsLinks.length; i++) {
       promises.push(limit(() => fetchProductsDetails(i)));
     }
     await Promise.all(promises);
+    fs.writeFileSync('products.json', JSON.stringify(products));
+
+    // Save to Csv
+    await saveToCsv();
 
     // Close the Browser
     await browser.close();
@@ -80,36 +86,42 @@ const fetchProductsDetails = (prodIdx) => new Promise(async (resolve, reject) =>
     await page.waitForSelector('.cldt-stage');
 
     const specs = await fetchSpecs(page);
-    // console.log(specs);
+    const facts = await pupHelper.getTxtMultiple('.cldt-stage-data .cldt-stage-basic-data > div .cldt-stage-primary-keyfact', page);
 
+    // product.url = products[prodIdx];
     product.title = await pupHelper.getTxt('h1.cldt-detail-title', page);
     product.make = await getCellVal('merk', specs);
     product.model = await getCellVal('model', specs);
     product.year = await getCellVal('bouwjaar', specs);
-    product.mileage = '';
-    product.content = '';
+    product.mileage = facts[0];
+    product.content = await pupHelper.getTxt('div[data-type="description"]', page);
     product.options = await pupHelper.getTxtMultiple('.cldt-equipment-block > span', page);
     await page.waitForSelector('.as24-pictures__slider .as24-carousel__item img');
     product.images = await pupHelper.getAttrMultiple('.as24-pictures__slider .as24-carousel__item img', 'data-fullscreen-src', page);
-    product.engineCapacity = '';
-    product.enginePower = '';
+    product.engineCapacity = await getCellVal('Cilinderinhoud', specs);
+    product.enginePower = facts[2] + ' ' + facts[3];
     product.bodyType = await getCellVal('carrosserietype', specs);
     product.transmission = await getCellVal('transmissie', specs);
     product.bodyColor = await getCellVal('kleur', specs);
-    product.interiorColor = '';
+    product.interiorColor = await getCellVal('Interieurinrichting', specs);
     product.fuelType = await getCellVal('brandstof', specs);
     product.condition = await getCellVal('categorie', specs);
-    product.licensePlateNumber = '';
+    product.licensePlateNumber = await getCellVal('advertentienr.', specs);
     product.numbersOfDoors = await getCellVal('deuren', specs);
-
-    console.log(product)
+    
+    for (const key in product) {
+      if (typeof product[key] != 'object') {
+        product[key] = product[key].replace(/\"/gi, "'");
+      } 
+    }
   
+    products.push(product);
     await page.close();
     resolve(true);
   } catch (error) {
     if (page) await page.close();
-    console.log(`fetchProductsDetails[${productsLinks[prodIdx]}] Error: `, error);
-    reject(error);
+    console.log(`fetchProductsDetails[${productsLinks[prodIdx]}] Error: `, error.message);
+    resolve(false);
   }
 });
 
@@ -134,8 +146,7 @@ const fetchSpecs = (page) => new Promise(async (resolve, reject) => {
   }
 });
 
-const getCellVal = (label, specs) =>
-  new Promise(async (resolve, reject) => {
+const getCellVal = (label, specs) => new Promise(async (resolve, reject) => {
     try {
       let returnVal = '';
       for (const specLabel in specs) {
@@ -149,7 +160,58 @@ const getCellVal = (label, specs) =>
       console.log(`getCellVal(${label}) Error: ${error}`);
       reject(error);
     }
-  });
+});
+
+const saveToCsv = () => new Promise(async (resolve, reject) => {
+  try {
+    console.log("Saving to csv...");
+    const fileName = `results ${moment().format('MM-DD-YYYY HH-mm')}.csv`;
+    const csvHeader = '"URL","Title","Make","Model","Year","Mileage","Options","Engine Capacity","Engine Power","Body Type","Transmission","Body Color","Interior Color","Fuel Type","Condition","License Plate Number","Numbers Of Doors","Image 1","Image 2","Image 3","Image 4","Image 5","Image 6","Image 7","Image 8","Image 9","Image 10","Image 11","Image 12","Image 13","Image 14","Content"\r\n';
+    fs.writeFileSync(fileName, csvHeader);
+
+    for (let i = 0; i < products.length; i++) {
+      let csvLine = '';
+      csvLine += `"${products[i].url}"`;
+      csvLine += `,"${products[i].title}"`;
+      csvLine += `,"${products[i].make}"`;
+      csvLine += `,"${products[i].model}"`;
+      csvLine += `,"${products[i].year}"`;
+      csvLine += `,"${products[i].mileage}"`;
+      csvLine += `,"${products[i].options.join(',')}"`;
+      csvLine += `,"${products[i].engineCapacity}"`;
+      csvLine += `,"${products[i].enginePower}"`;
+      csvLine += `,"${products[i].bodyType}"`;
+      csvLine += `,"${products[i].transmission}"`;
+      csvLine += `,"${products[i].bodyColor}"`;
+      csvLine += `,"${products[i].interiorColor}"`;
+      csvLine += `,"${products[i].fuelType}"`;
+      csvLine += `,"${products[i].condition}"`;
+      csvLine += `,"${products[i].licensePlateNumber}"`;
+      csvLine += `,"${products[i].numbersOfDoors}"`;
+      csvLine +=  products[i].images[0] ? `,"${products[i].images[0]}"` : ',""';
+      csvLine +=  products[i].images[1] ? `,"${products[i].images[1]}"` : ',""';
+      csvLine +=  products[i].images[2] ? `,"${products[i].images[2]}"` : ',""';
+      csvLine +=  products[i].images[3] ? `,"${products[i].images[3]}"` : ',""';
+      csvLine +=  products[i].images[4] ? `,"${products[i].images[4]}"` : ',""';
+      csvLine +=  products[i].images[5] ? `,"${products[i].images[5]}"` : ',""';
+      csvLine +=  products[i].images[6] ? `,"${products[i].images[6]}"` : ',""';
+      csvLine +=  products[i].images[7] ? `,"${products[i].images[7]}"` : ',""';
+      csvLine +=  products[i].images[8] ? `,"${products[i].images[8]}"` : ',""';
+      csvLine +=  products[i].images[9] ? `,"${products[i].images[9]}"` : ',""';
+      csvLine +=  products[i].images[10] ? `,"${products[i].images[10]}"` : ',""';
+      csvLine +=  products[i].images[11] ? `,"${products[i].images[11]}"` : ',""';
+      csvLine +=  products[i].images[12] ? `,"${products[i].images[12]}"` : ',""';
+      csvLine +=  products[i].images[13] ? `,"${products[i].images[13]}"` : ',""';
+      csvLine += `,"${products[i].content}"\r\n`;
+      fs.appendFileSync(fileName, csvLine);
+    }
+
+    resolve(true);
+  } catch (error) {
+    console.log('saveToCsv Error: ', error);
+    reject(error);
+  }
+});
 
 (async () => {
   await scrapeSite();
