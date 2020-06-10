@@ -247,10 +247,19 @@ module.exports.getAttrMultiple = (selector, attribute, page) => new Promise(asyn
     if (isNode) {
       attr = await page.$$eval(
         selector,
-        (elms, attribute) => elms.map(elm => elm.getAttribute(attribute).trim()),
+        (elms, attribute) => elms.map(elm => {
+          let attrVal = elm.getAttribute(attribute)
+          if (attrVal) {
+            attrVal = attrVal.trim();
+          } else {
+            attrVal = '';
+          }
+          return attrVal;
+        }),
         attribute
       );
     };
+    attr = attr.filter(atr => atr !== '');
 
     resolve(attr)
   } catch (error) {

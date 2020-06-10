@@ -93,6 +93,8 @@ const fetchProductsDetails = (prodIdx) => new Promise(async (resolve, reject) =>
     product.make = await getCellVal('merk', specs);
     product.model = await getCellVal('model', specs);
     product.year = await getCellVal('bouwjaar', specs);
+    product.dealerName = await pupHelper.getTxt('.cldt-stage-vendor-name-rating > span', page);
+    product.phoneNumber = await pupHelper.getTxt('.cldt-stage-vendor-buttons a[data-type="cldt-call-button"]', page);
     product.price = await pupHelper.getTxt('.cldt-stage-headline .cldt-price > h2', page);
     product.price = product.price.replace(/^€/gi, '').trim().replace(/\./gi, '').trim().replace(/,-$/gi, '').trim()
     product.mileage = facts[0];
@@ -169,7 +171,7 @@ const saveToCsv = () => new Promise(async (resolve, reject) => {
   try {
     console.log("Saving to csv...");
     const fileName = `results ${moment().format('MM-DD-YYYY HH-mm')}.csv`;
-    const csvHeader = '"URL","Title","Make","Model","Year","Price","Location","Mileage","Options","Engine Capacity","Engine Power","Body Type","Transmission","Body Color","Interior Color","Fuel Type","Condition","License Plate Number","Numbers Of Doors","Image 1","Image 2","Image 3","Image 4","Image 5","Image 6","Image 7","Image 8","Image 9","Image 10","Image 11","Image 12","Image 13","Image 14","Content"\r\n';
+    const csvHeader = '"URL","Title","Make","Model","Year","Dealer Name","Phone Number","Price","Location","Mileage","Options","Engine Capacity","Engine Power","Body Type","Transmission","Body Color","Interior Color","Fuel Type","Condition","License Plate Number","Numbers Of Doors","Image 1","Image 2","Image 3","Image 4","Image 5","Image 6","Image 7","Image 8","Image 9","Image 10","Image 11","Image 12","Image 13","Image 14","Content"\r\n';
     fs.writeFileSync(fileName, csvHeader);
 
     for (let i = 0; i < products.length; i++) {
@@ -179,6 +181,8 @@ const saveToCsv = () => new Promise(async (resolve, reject) => {
       csvLine += `,"${products[i].make}"`;
       csvLine += `,"${products[i].model}"`;
       csvLine += `,"${products[i].year}"`;
+      csvLine += `,"${products[i].dealerName}"`;
+      csvLine += `,"${products[i].phoneNumber}"`;
       csvLine += `,"${products[i].price}"`;
       csvLine += `,"${products[i].location}"`;
       csvLine += `,"${products[i].mileage}"`;
