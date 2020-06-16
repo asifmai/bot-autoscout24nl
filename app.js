@@ -101,8 +101,13 @@ const fetchProductsDetails = (prodIdx) => new Promise(async (resolve, reject) =>
     product.location = await pupHelper.getTxt('.cldt-stage-vendor-data > .cldt-stage-vendor-text > div:first-child', page);
     product.content = await pupHelper.getTxt('div[data-type="description"]', page);
     product.options = await pupHelper.getTxtMultiple('.cldt-equipment-block > span', page);
-    await page.waitForSelector('.as24-pictures__slider .as24-carousel__item img');
-    product.images = await pupHelper.getAttrMultiple('.as24-pictures__slider .as24-carousel__item img', 'data-fullscreen-src', page);
+    const hasImages = await page.$('.as24-pictures__slider .as24-carousel__item img');
+    if (hasImages) {
+      product.images = await pupHelper.getAttrMultiple('.as24-pictures__slider .as24-carousel__item img', 'data-fullscreen-src', page);
+    } else {
+      product.images = [];
+      product.images.push(await pupHelper.getAttr('.cldt-stage-gallery-holder .single-picture > img', 'src', page));
+    }
     product.engineCapacity = await getCellVal('Cilinderinhoud', specs);
     product.enginePower = facts[2] + ' ' + facts[3];
     product.bodyType = await getCellVal('carrosserietype', specs);
